@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🦋 AR蝶々 - ピンク&パープル</title>
+
+  <!-- A-Frame & AR.js -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Georgia', serif;
+      background: #0d0010;
+      color: #f0d6ff;
+      overflow: hidden;
+    }
+
+    /* 起動画面 */
+    #splash {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #1a0028 0%, #2d0050 50%, #1a0028 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      z-index: 9999;
+      transition: opacity 0.8s ease;
+    }
+
+    #splash.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .splash-title {
+      font-size: clamp(2rem, 8vw, 3.5rem);
+      letter-spacing: 0.15em;
+      color: #f0b8ff;
+      text-shadow: 0 0 40px #c060ff88;
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+
+    .splash-sub {
+      font-size: clamp(0.85rem, 3vw, 1.1rem);
+      color: #c090e0;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .butterfly-icon {
+      font-size: clamp(3rem, 12vw, 6rem);
+      animation: flutter 1.2s ease-in-out infinite alternate;
+      filter: drop-shadow(0 0 20px #cc44ff);
+    }
+
+    .start-btn {
+      margin-top: 16px;
+      padding: 14px 40px;
+      background: transparent;
+      border: 1.5px solid #c060ff;
+      border-radius: 40px;
+      color: #f0b8ff;
+      font-size: 1rem;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+    }
+
+    .start-btn:hover, .start-btn:active {
+      background: #c060ff22;
+      box-shadow: 0 0 30px #c060ff55;
+      transform: scale(1.04);
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: #9060b0;
+      letter-spacing: 0.1em;
+      text-align: center;
+      padding: 0 32px;
+      line-height: 1.7;
+    }
+
+    /* AR案内UI */
+    #ar-ui {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 20px 24px 36px;
+      background: linear-gradient(to top, #0d001088, transparent);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    #ar-ui.visible { display: flex; }
+
+    .ar-label {
+      font-size: 0.85rem;
+      letter-spacing: 0.18em;
+      color: #f0b8ffcc;
+      text-transform: uppercase;
+      text-shadow: 0 2px 8px #000;
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+
+    .marker-hint {
+      font-size: 0.75rem;
+      color: #c090e0aa;
+      letter-spacing: 0.1em;
+      text-align: center;
+    }
+
+    /* 戻るボタン */
+    #back-btn {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #2d005088;
+      border: 1px solid #c060ff55;
+      color: #f0b8ff;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s;
+    }
+
+    #back-btn.visible { display: flex; }
+    #back-btn:hover { background: #c060ff33; }
+
+    @keyframes glow {
+      from { text-shadow: 0 0 20px #c060ff44; }
+      to   { text-shadow: 0 0 60px #c060ffaa, 0 0 20px #ff80ff66; }
+    }
+
+    @keyframes flutter {
+      from { transform: scaleX(1); }
+      to   { transform: scaleX(0.6); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; }
+      50%       { opacity: 1;   }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 起動スプラッシュ -->
+<div id="splash">
+  <div class="butterfly-icon">🦋</div>
+  <div class="splash-title">AR Butterfly</div>
+  <div class="splash-sub">ピンク &amp; パープルの蝶々たち</div>
+  <button class="start-btn" onclick="startAR()">カメラを起動する</button>
+  <div class="hint">
+    カメラを許可して、<br>
+    マーカー（Hiroマーカー）に向けると<br>
+    蝶々が5匹飛び出します 🦋✨
+  </div>
+</div>
+
+<!-- 戻るボタン -->
+<button id="back-btn" onclick="location.reload()">←</button>
+
+<!-- AR案内UI -->
+<div id="ar-ui">
+  <div class="ar-label">🦋 マーカーを探しています...</div>
+  <div class="marker-hint">Hiroマーカーにカメラを向けてください</div>
+</div>
+
+<!-- A-Frame ARシーン -->
+<a-scene
+  id="ar-scene"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+  renderer="logarithmicDepthBuffer: true; antialias: true;"
+  vr-mode-ui="enabled: false"
+  style="display:none; position:fixed; inset:0; width:100%; height:100%;"
+>
+
+  <!-- 蝶々コンポーネント定義 -->
+  <a-assets>
+    <!-- 蝶々の羽（左右）をプリミティブで表現 -->
+  </a-assets>
+
+  <!-- Hiroマーカー上に蝶々5匹 -->
+  <a-marker preset="hiro" id="marker">
+
+    <!-- 蝶々1：中央・ピンク -->
+    <a-entity id="butterfly-1" position="0 0 0" butterfly-flap="speed: 1.2; color1: #ff69b4; color2: #ff1493; offsetY: 0.5">
+    </a-entity>
+
+    <!-- 蝶々2：左・パープル -->
+    <a-entity id="butterfly-2" position="-1.2 0.3 0.4" butterfly-flap="speed: 0.9; color1: #9b59b6; color2: #6c3483; offsetY: 0.2">
+    </a-entity>
+
+    <!-- 蝶々3：右・ライトピンク -->
+    <a-entity id="butterfly-3" position="1.2 0.2 -0.3" butterfly-flap="speed: 1.5; color1: #ffb6c1; color2: #ff69b4; offsetY: 0.8">
+    </a-entity>
+
+    <!-- 蝶々4：奥・パープル系 -->
+    <a-entity id="butterfly-4" position="-0.5 0.6 -1.0" butterfly-flap="speed: 1.0; color1: #da70d6; color2: #9932cc; offsetY: 1.0">
+    </a-entity>
+
+    <!-- 蝶々5：右奥・ラベンダー -->
+    <a-entity id="butterfly-5" position="0.8 0.4 -0.8" butterfly-flap="speed: 1.3; color1: #e6b3ff; color2: #9b59b6; offsetY: 0.6">
+    </a-entity>
+
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+
+<script>
+// 蝶々コンポーネント：ひらひら羽ばたき＋浮遊アニメーション
+AFRAME.registerComponent('butterfly-flap', {
+  schema: {
+    speed:   { type: 'number', default: 1.0 },
+    color1:  { type: 'string', default: '#ff69b4' },
+    color2:  { type: 'string', default: '#9b59b6' },
+    offsetY: { type: 'number', default: 0 }
+  },
+
+  init: function () {
+    const el    = this.el;
+    const data  = this.data;
+    const scene = el.sceneEl;
+
+    // 体（細長い楕円）
+    const body = document.createElement('a-cylinder');
+    body.setAttribute('radius', 0.04);
+    body.setAttribute('height', 0.28);
+    body.setAttribute('color',  '#2d0050');
+    body.setAttribute('rotation', '0 0 0');
+    el.appendChild(body);
+
+    // 上羽・左
+    const wUL = this._makeWing(0.35, 0.22, data.color1, '-20 0 -30');
+    wUL.setAttribute('position', '-0.18 0.06 0');
+    el.appendChild(wUL);
+
+    // 上羽・右
+    const wUR = this._makeWing(0.35, 0.22, data.color1, '-20 0 30');
+    wUR.setAttribute('position', '0.18 0.06 0');
+    el.appendChild(wUR);
+
+    // 下羽・左
+    const wLL = this._makeWing(0.25, 0.18, data.color2, '10 0 -20');
+    wLL.setAttribute('position', '-0.15 -0.06 0');
+    el.appendChild(wLL);
+
+    // 下羽・右
+    const wLR = this._makeWing(0.25, 0.18, data.color2, '10 0 20');
+    wLR.setAttribute('position', '0.15 -0.06 0');
+    el.appendChild(wLR);
+
+    // 触覚
+    const ant1 = document.createElement('a-cylinder');
+    ant1.setAttribute('radius', 0.01);
+    ant1.setAttribute('height', 0.15);
+    ant1.setAttribute('color',  '#2d0050');
+    ant1.setAttribute('rotation', '0 0 -25');
+    ant1.setAttribute('position', '-0.06 0.18 0');
+    el.appendChild(ant1);
+
+    const ant2 = document.createElement('a-cylinder');
+    ant2.setAttribute('radius', 0.01);
+    ant2.setAttribute('height', 0.15);
+    ant2.setAttribute('color',  '#2d0050');
+    ant2.setAttribute('rotation', '0 0 25');
+    ant2.setAttribute('position', '0.06 0.18 0');
+    el.appendChild(ant2);
+
+    this.wings = [wUL, wUR, wLL, wLR];
+    this.t = data.offsetY * 10; // 位相をずらす
+
+    // 初期スケール保存
+    this.baseScale = { ul: 1, ur: 1, ll: 1, lr: 1 };
+  },
+
+  _makeWing: function (rx, ry, color, rotation) {
+    const wing = document.createElement('a-ellipse');
+    wing.setAttribute('semi-minor-axis', rx);
+    wing.setAttribute('semi-major-axis', ry);
+    wing.setAttribute('color',    color);
+    wing.setAttribute('opacity',  '0.88');
+    wing.setAttribute('rotation', rotation);
+    wing.setAttribute('material', 'side: double; transparent: true; opacity: 0.88');
+    return wing;
+  },
+
+  tick: function (time) {
+    const data = this.data;
+    this.t += 0.016 * data.speed;
+    const t = this.t;
+
+    // 羽ばたき：X軸スケールを sin で変化させる（-0.15 〜 1.0）
+    const flapVal = Math.abs(Math.sin(t * 3.5));
+    const scaleX  = 0.15 + flapVal * 0.85;
+
+    const [wUL, wUR, wLL, wLR] = this.wings;
+
+    // 左羽はマイナス方向
+    wUL.setAttribute('scale', `-${scaleX} 1 1`);
+    wUR.setAttribute('scale', `${scaleX} 1 1`);
+    wLL.setAttribute('scale', `-${scaleX} 1 1`);
+    wLR.setAttribute('scale', `${scaleX} 1 1`);
+
+    // 浮遊：Y軸を sin でゆらゆら
+    const floatY = Math.sin(t * 0.8) * 0.12;
+    this.el.object3D.position.y = floatY;
+
+    // ゆるやかに回転（Z軸）
+    const wobble = Math.sin(t * 0.5) * 8;
+    this.el.object3D.rotation.z = THREE.MathUtils.degToRad(wobble);
+  }
+});
+
+// AR起動
+function startAR() {
+  document.getElementById('splash').classList.add('hidden');
+  document.getElementById('ar-scene').style.display = 'block';
+  document.getElementById('ar-ui').classList.add('visible');
+  document.getElementById('back-btn').classList.add('visible');
+
+  // マーカー検出時
+  const marker = document.getElementById('marker');
+  if (marker) {
+    marker.addEventListener('markerFound', () => {
+      document.querySelector('.ar-label').textContent = '🦋 蝶々が飛んでいます！';
+    });
+    marker.addEventListener('markerLost', () => {
+      document.querySelector('.ar-label').textContent = '🦋 マーカーを探しています...';
+    });
+  }
+}
+</script>
+
+</body>
+</html>
